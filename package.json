@@ -10,7 +10,7 @@
     "test": "npx jest --coverage",
     "prepublishOnly": "npm run build",
     "ensure-build": "(node -e \"if (!require('fs').existsSync(__dirname + '/dist')) {process.exit(1)}\" || yarn run build)",
-    "prepack": "yarn run ensure-build",
+    "postinstall": "yarn run ensure-build",
     "prepare": "yarn run ensure-build"
   },
   "main": "dist/index.js",
