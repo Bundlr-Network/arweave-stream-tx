@@ -5,6 +5,7 @@ import { b64UrlToBuffer, bufferTob64Url } from 'arweave/node/lib/utils';
 import { backOff } from 'exponential-backoff';
 import { pipeline } from 'stream/promises';
 import { chunker } from './common';
+import { DebugOptions } from './common/types';
 
 // Copied from `arweave-js`.
 const FATAL_CHUNK_UPLOAD_ERRORS = [
@@ -33,7 +34,15 @@ const MAX_CONCURRENT_CHUNK_UPLOAD_COUNT = 128;
  * @param createTx whether or not the passed transaction should be created on the network.
  * This can be false if we want to reseed an existing transaction,
  */
-export function uploadTransactionAsync(tx: Transaction, arweave: Arweave, createTx = true) {
+export function uploadTransactionAsync(tx: Transaction, arweave: Arweave, createTx = true, debugOpts?: DebugOptions) {
+  const txId = tx.id;
+
+  const log = (message: string): void => {
+    if (debugOpts?.log) debugOpts.log(`[uploadTransactionAsync:${txId}] ${message}`);
+  }
+
+  log(`Starting chunked upload - ${tx.chunks?.chunks?.length} chunks / ${tx.data_size} total bytes`);
+
   return async (source: AsyncIterable<Buffer>): Promise<void> => {
     if (!tx.chunks) {
       throw Error('Transaction has no computed chunks!');
@@ -64,6 +73,8 @@ export function uploadTransactionAsync(tx: Transaction, arweave: Arweave, create
       };
     }
 
+    log(`Starting pipe - MAX_CHUNK_SIZE=${MAX_CHUNK_SIZE}`);
+
     await pipeline(source, chunker(MAX_CHUNK_SIZE, { flush: true }), async (chunkedSource: AsyncIterable<Buffer>) => {
       let chunkIndex = 0;
       let dataRebalancedIntoFinalChunk: Buffer | undefined;
@@ -73,6 +84,9 @@ export function uploadTransactionAsync(tx: Transaction, arweave: Arweave, create
       for await (const chunkData of chunkedSource) {
         const currentChunk = chunks[chunkIndex];
         const chunkSize = currentChunk.maxByteRange - currentChunk.minByteRange;
+
+        log(`Got chunk - ${chunkData.byteLength} bytes / chunkSize ${chunkSize}`);
+
         const expectedToBeFinalRebalancedChunk = dataRebalancedIntoFinalChunk != null;
 
         let chunkPayload: ChunkUploadPayload;
@@ -120,7 +134,9 @@ export function uploadTransactionAsync(tx: Transaction, arweave: Arweave, create
         // If we are already at the maximum concurrent chunk upload limit,
         // wait till all of them to complete first before continuing.
         if (activeChunkUploads.length >= MAX_CONCURRENT_CHUNK_UPLOAD_COUNT) {
+          console.log(`Resolving concurrent chunk uploads`);
           await Promise.all(activeChunkUploads);
+          console.log(`Resolved concurrent chunk uploads`);
           // Clear the active chunk uploads array.
           activeChunkUploads.length = 0;
         }
@@ -132,9 +148,12 @@ export function uploadTransactionAsync(tx: Transaction, arweave: Arweave, create
         );
 
         chunkIndex++;
+        log(`Chunk process done - ${chunkIndex}`);
       }
 
       await Promise.all(activeChunkUploads);
+
+      console.log(`All chunks uploaded`);
 
       if (chunkIndex < chunks.length) {
         throw Error(`Transaction upload incomplete: ${chunkIndex + 1}/${chunks.length} chunks uploaded.`);
