@@ -31,8 +31,11 @@ const MAX_CONCURRENT_CHUNK_UPLOAD_COUNT = 128;
 /**
  * Uploads the piped data to the specified transaction.
  *
+ * @param tx
+ * @param arweave
  * @param createTx whether or not the passed transaction should be created on the network.
  * This can be false if we want to reseed an existing transaction,
+ * @param debugOpts
  */
 export function uploadTransactionAsync(tx: Transaction, arweave: Arweave, createTx = true, debugOpts?: DebugOptions) {
   const txId = tx.id;
@@ -151,6 +154,8 @@ export function uploadTransactionAsync(tx: Transaction, arweave: Arweave, create
         log(`Chunk process done - ${chunkIndex}`);
       }
 
+      log(`Active chunks to upload - ${activeChunkUploads.length}`);
+
       await Promise.all(activeChunkUploads);
 
       console.log(`All chunks uploaded`);
@@ -158,6 +163,9 @@ export function uploadTransactionAsync(tx: Transaction, arweave: Arweave, create
       if (chunkIndex < chunks.length) {
         throw Error(`Transaction upload incomplete: ${chunkIndex + 1}/${chunks.length} chunks uploaded.`);
       }
+    }).catch(e => {
+      log(e.message);
+      throw e;
     });
   };
 }
