@@ -50,7 +50,6 @@ export function chunker(expectedChunkSize: number, { flush }: ChunkerOptions = {
     const chunkBuffer = new ChunkBuffer();
 
     for await (const chunk of stream) {
-      console.log(chunk.length, chunk);
       chunkBuffer.push(chunk);
 
       while (true) {

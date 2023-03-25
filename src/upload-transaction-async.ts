@@ -137,9 +137,7 @@ export function uploadTransactionAsync(tx: Transaction, arweave: Arweave, create
         // If we are already at the maximum concurrent chunk upload limit,
         // wait till all of them to complete first before continuing.
         if (activeChunkUploads.length >= MAX_CONCURRENT_CHUNK_UPLOAD_COUNT) {
-          console.log(`Resolving concurrent chunk uploads`);
           await Promise.all(activeChunkUploads);
-          console.log(`Resolved concurrent chunk uploads`);
           // Clear the active chunk uploads array.
           activeChunkUploads.length = 0;
         }
@@ -157,8 +155,6 @@ export function uploadTransactionAsync(tx: Transaction, arweave: Arweave, create
       log(`Active chunks to upload - ${activeChunkUploads.length}`);
 
       await Promise.all(activeChunkUploads);
-
-      console.log(`All chunks uploaded`);
 
       if (chunkIndex < chunks.length) {
         throw Error(`Transaction upload incomplete: ${chunkIndex + 1}/${chunks.length} chunks uploaded.`);
