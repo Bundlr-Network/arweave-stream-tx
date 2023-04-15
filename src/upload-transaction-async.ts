@@ -56,9 +56,9 @@ export function uploadTransactionAsync(tx: Transaction, arweave: Arweave, create
       // We'll upload this data in chunks instead.
       tx.data = new Uint8Array(0);
 
-      const createTxRes = await arweave.api.post(`tx`, tx);
+      const createTxRes = await backOff(() => arweave.api.post(`tx`, tx));
       if (!(createTxRes.status >= 200 && createTxRes.status < 300)) {
-        throw new Error(`Failed to create transaction: ${createTxRes.data}`);
+        throw new Error(`Failed to create transaction: status ${createTxRes.status} / data ${createTxRes.data}`);
       }
     }
 
