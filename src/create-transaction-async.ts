@@ -5,6 +5,7 @@ import { bufferTob64Url } from 'arweave/node/lib/utils';
 import { JWKInterface } from 'arweave/node/lib/wallet';
 import { pipeline } from 'stream/promises';
 import { generateTransactionChunksAsync } from './generate-transaction-chunks-async';
+import { backOff } from 'exponential-backoff';
 
 /**
  * Creates an Arweave transaction from the piped data stream.
@@ -20,12 +21,12 @@ export function createTransactionAsync(
     const txAttrs = Object.assign({}, attributes);
 
     txAttrs.owner ??= jwk?.n;
-    txAttrs.last_tx ??= await arweave.transactions.getTransactionAnchor();
+    txAttrs.last_tx ??= await backOff(() => arweave.transactions.getTransactionAnchor(), { numOfAttempts: 5 });
 
     const lastChunk = chunks.chunks[chunks.chunks.length - 1];
     const dataByteLength = lastChunk.maxByteRange;
 
-    txAttrs.reward ??= await arweave.transactions.getPrice(dataByteLength, txAttrs.target);
+    txAttrs.reward ??= await backOff(() => arweave.transactions.getPrice(dataByteLength, txAttrs.target), { numOfAttempts: 5 });
 
     txAttrs.data_size = dataByteLength.toString();
 
