@@ -21,12 +21,12 @@ export function createTransactionAsync(
     const txAttrs = Object.assign({}, attributes);
 
     txAttrs.owner ??= jwk?.n;
-    txAttrs.last_tx ??= await backOff(() => arweave.transactions.getTransactionAnchor(), { numOfAttempts: 5 });
+    txAttrs.last_tx ??= await backOff(() => arweave.transactions.getTransactionAnchor(), { numOfAttempts: 10, startingDelay: 500 });
 
     const lastChunk = chunks.chunks[chunks.chunks.length - 1];
     const dataByteLength = lastChunk.maxByteRange;
 
-    txAttrs.reward ??= await backOff(() => arweave.transactions.getPrice(dataByteLength, txAttrs.target), { numOfAttempts: 5 });
+    txAttrs.reward ??= await backOff(() => arweave.transactions.getPrice(dataByteLength, txAttrs.target), { numOfAttempts: 5, startingDelay: 500 });
 
     txAttrs.data_size = dataByteLength.toString();
 
