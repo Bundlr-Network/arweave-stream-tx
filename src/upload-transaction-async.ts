@@ -6,6 +6,7 @@ import { backOff } from 'exponential-backoff';
 import { pipeline } from 'stream/promises';
 import { chunker } from './common';
 import { DebugOptions } from './common/types';
+import { PromisePool } from "@supercharge/promise-pool";
 
 // Copied from `arweave-js`.
 const FATAL_CHUNK_UPLOAD_ERRORS = [
@@ -37,7 +38,7 @@ const MAX_CONCURRENT_CHUNK_UPLOAD_COUNT = 128;
  * This can be false if we want to reseed an existing transaction,
  * @param debugOpts
  */
-export function uploadTransactionToManyAsync(tx: Transaction, arweave: Arweave[], debugOpts?: DebugOptions) {
+export function uploadTransactionToManyAsync(tx: Transaction, arweave: Arweave[], minimumMiners: number, debugOpts?: DebugOptions) {
   const txId = tx.id;
 
   const UPLOAD_CONCURRENCY = Math.max(MAX_CONCURRENT_CHUNK_UPLOAD_COUNT / arweave.length);
@@ -145,9 +146,7 @@ export function uploadTransactionToManyAsync(tx: Transaction, arweave: Arweave[]
         }
 
         activeChunkUploads.push(
-          ...arweave.map((a) => backOff(() => a.api.post('chunk', chunkPayload), {
-            retry: (err) => !FATAL_CHUNK_UPLOAD_ERRORS.includes(err.message),
-          })),
+          postChunkToMiners(chunkPayload, arweave, minimumMiners),
         );
 
         chunkIndex++;
@@ -166,6 +165,27 @@ export function uploadTransactionToManyAsync(tx: Transaction, arweave: Arweave[]
       throw e;
     });
   };
+}
+
+async function postChunkToMiners(chunk: any, miners: Arweave[], minimumSuccess: number): Promise<void> {
+  let success = 0;
+  await PromisePool
+    .withConcurrency(minimumSuccess)
+    .for(miners)
+    .process(async (miner, _, pool) => {
+      try {
+        backOff(() => miner.api.post('chunk', chunk), {
+          retry: (err) => !FATAL_CHUNK_UPLOAD_ERRORS.includes(err.message),
+        })
+      } catch (e) {
+        return;
+      }
+
+      success++;
+      if (success >= minimumSuccess) pool.stop();
+    });
+
+  if (success < minimumSuccess) throw new Error(`Couldn't post chunk to minimum of ${minimumSuccess} miners`);
 }
 
 export function uploadTransactionAsync(tx: Transaction, arweave: Arweave, createTx = true, debugOpts?: DebugOptions) {
